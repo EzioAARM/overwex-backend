@@ -8,32 +8,117 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 180
+    Handler: app.handler
+    Runtime: nodejs12.x
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
     Properties:
-      CodeUri: hello-world/
-      Handler: app.lambdaHandler
-      Runtime: nodejs12.x
-      Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /hello
-            Method: get
+      UsernameAttributes:
+        - email
+      EmailVerificationSubject: DEVELOPER
+      EmailConfiguration:
+        EmailSendingAccount: DEVELOPER
+        From: Overwex Team <alejandrom9712@gmail.com>
+        SourceArn: arn:aws:ses:us-east-1:875649895777:identity/alejandrom9712@gmail.com
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+      UserPoolName: overwex-pool
+      VerificationMessageTemplate: 
+        DefaultEmailOption: CONFIRM_WITH_LINK
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true 
 
-Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  CognitoPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: overwexwebsite
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - aws.cognito.signin.user.admin
+        - profile
+      CallbackURLs:
+        - https://overwex.axe-rodriguez.com
+      LogoutURLs:
+        - https://overwex.axe-rodriguez.com
+      SupportedIdentityProviders:
+        - COGNITO
+
+  OverwexApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Cors:
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      Domain:
+        Route53:
+          HostedZoneId: Z1OS8RJVFWP6SE
+        CertificateArn: arn:aws:acm:us-east-1:875649895777:certificate/92a043d8-7201-453f-82c1-5baa0c12461c
+        DomainName: overwexapi.axel-rodriguez.com
+        EndpointConfiguration: REGIONAL
+      StageName: prod
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Policies:
+        - AmazonCognitoPowerUser
+      Environment:
+        Variables:
+          CognitoPoolId: !Ref CognitoUserPool
+          CognitoClientId: !Ref CognitoPoolClient
+          CognitoSecretClient: !GetAtt CognitoPoolClient.ClientSecret
+      CodeUri: auth/login
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OverwexApi
+            Path: /api/v1/auth/login
+            Method: post
+
+  RegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Environment:
+        Variables:
+          CognitoPoolId: !Ref CognitoUserPool
+          CognitoClientId: !Ref CognitoPoolClient
+          CognitoSecretClient: !GetAtt CognitoPoolClient.ClientSecret
+      CodeUri: auth/register
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OverwexApi
+            Path: /api/v1/auth/register
+            Method: post
