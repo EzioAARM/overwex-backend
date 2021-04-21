@@ -12,12 +12,15 @@ Globals:
     Handler: app.handler
     Runtime: nodejs12.x
 
+Parameters:
+  CognitoSecretClientParam:
+    Type: String
+    Description: Secret del client de cognito
+
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UsernameAttributes:
-        - email
       EmailVerificationSubject: DEVELOPER
       EmailConfiguration:
         EmailSendingAccount: DEVELOPER
@@ -72,6 +75,12 @@ Resources:
         - https://overwex.axe-rodriguez.com
       SupportedIdentityProviders:
         - COGNITO
+  
+  CognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: overwex
+      UserPoolId: !Ref CognitoUserPool
 
   OverwexApi:
     Type: AWS::Serverless::Api
@@ -96,7 +105,7 @@ Resources:
         Variables:
           CognitoPoolId: !Ref CognitoUserPool
           CognitoClientId: !Ref CognitoPoolClient
-          CognitoSecretClient: !GetAtt CognitoPoolClient.ClientSecret
+          CognitoSecretClient: !Ref CognitoSecretClientParam
       CodeUri: auth/login
       Events:
         Login:
@@ -113,7 +122,7 @@ Resources:
         Variables:
           CognitoPoolId: !Ref CognitoUserPool
           CognitoClientId: !Ref CognitoPoolClient
-          CognitoSecretClient: !GetAtt CognitoPoolClient.ClientSecret
+          CognitoSecretClient: !Ref CognitoSecretClientParam
       CodeUri: auth/register
       Events:
         Register:
